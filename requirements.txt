@@ -1,0 +1,7 @@
+requests>=2.31
+python-dotenv>=1.0
+pandas>=2.0
+pyarrow>=14.0
+tqdm>=4.65
+matplotlib>=3.7
+seaborn>=0.13
