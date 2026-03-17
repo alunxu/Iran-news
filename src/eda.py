@@ -429,7 +429,7 @@ def print_summary_stats(df):
         ("Nuclear Deal Era", 2015, 2017),
         ("Trump Max Pressure", 2018, 2021),
         ("Women Life Freedom", 2022, 2023),
-        ("2024-2026 Escalation", 2024, 2026),
+        ("Direct Confrontation", 2024, 2026),
     ]
     for label, y_start, y_end in periods:
         mask = (df["year"] >= y_start) & (df["year"] <= y_end)

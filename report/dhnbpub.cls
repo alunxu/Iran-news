@@ -290,8 +290,9 @@
 
 \RenewDocumentCommand \maketitle {} {
   \nonumnote{\itshape \ceurConference@name}
-  \logonote{\@copyrightLine}
-  \logonote{\@dhnbLogoLine}
+  % PATCHED: removed copyright and DHNB logo footer for coursework
+  % \logonote{\@copyrightLine}
+  % \logonote{\@dhnbLogoLine}
   % \ifbool { usecasgrabsbox }
   %   {
   %     \setcounter{page}{0}

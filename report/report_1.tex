@@ -1,0 +1,109 @@
+%% DH-412 Project Report 1
+\documentclass{dhnbpub}
+\addbibresource{sample.bib}
+\renewcommand{\abstractname}{}
+\sloppy
+
+\usepackage{listings}
+\lstset{breaklines=true}
+
+\usepackage{booktabs}
+
+\begin{document}
+
+\conference{DH-412: History and the Digital, EPFL, Spring 2026}
+
+% \title{From Hostages to Atoms: Frame Succession in Four Decades of \textit{New York Times} Iran Coverage}
+\title{Framing and Reframing Iran Across Five Decades of Crisis in the \textit{New York Times}}
+
+
+\author{Weilun Xu}
+\author{Niccholas Tim Reiz}
+\author{Nastaran Hashemisanjani}
+\author{Dmitry Teploukhov}
+\address{EPFL, Lausanne, Switzerland}
+
+  % How does the dominant Western narrative about Iran change---and what remains constant---across five decades of geopolitical upheaval? Drawing on a corpus of 40,381 Iran-related articles from the \textit{New York Times} (1979--2020), extracted via the NYT Archive API, we identify a pattern we term \emph{frame succession}: a sequence of dominant lexical frames---``hostage'' (1979--82, peaking at 37\%), ``military'' (1980s, $\sim$20\%), ``nuclear'' (2003--present, reaching 45\%)---that each displace but never fully erase their predecessors. Throughout, ``diplomacy'' remains marginal at 3--7\%, suggesting that threat-oriented vocabulary systematically crowds out cooperative framing. These findings provide large-scale computational evidence for dynamics that Said theorized qualitatively in \emph{Covering Islam}: the reduction of a complex society to a shifting series of Western security anxieties.
+
+% \begin{keywords}
+%   media framing \sep
+%   Iran \sep
+%   New York Times \sep
+%   digital history \sep
+%   computational text analysis \sep
+%   Orientalism
+% \end{keywords}
+
+\maketitle
+
+\section{Introduction}
+Nations are not only political entities but narrative constructions, shaped as much by the media discourse produced about them as by the events themselves. Edward Said argued in \emph{Covering Islam} \citep{Said1981} that Western journalism does not merely report on the Middle East but produces the very categories through which it is perceived. Robert Entman \citep{Entman1993} formalized this insight: media frames \emph{select} certain aspects of reality and \emph{make them salient}, promoting particular problem definitions while suppressing alternatives. If Said is right, the lexical record of a newspaper like the \textit{New York Times} should bear measurable traces of this process---not as a static bias, but as a dynamic one that reconfigures itself around each new geopolitical crisis.
+
+Iran provides a uniquely compelling case. No other country has passed through so many distinct Western crisis frames within a single half-century: revolution, hostage-taking, proxy warfare, nuclear proliferation, popular protest, and direct military confrontation. Iranian political discourse itself describes Western media coverage as a form of ``soft war'' (\emph{jang-e narm}), recognizing the power of narrative framing as a geopolitical force. The question is whether editorial choices---of vocabulary, imagery, and historical analogy---leave behind a coherent pattern, and what that pattern reveals about how elite Western media processes geopolitical complexity.
+
+% Over the past half-century, the country has repeatedly appeared in Western media narratives through successive geopolitical crises. Since the 1979 Iranian Revolution and the hostage crisis, Iran has been represented through shifting frames associated with regional conflict, nuclear proliferation, sanctions, and political unrest. Events such as debates over the nuclear program and the 2015 Joint Comprehensive Plan of Action (JCPOA) generated extensive international coverage, while more recent developments—including the 2022 “Women, Life, Freedom” protests and rising regional tensions involving Iran, Israel, and the United States—have again placed Iran at the center of global media attention. Examining how these moments are framed in the press provides insight into how Western media constructs and interprets geopolitical crises over time.
+
+This is also a question about historical memory. As Erll \citep{Erll2011} has shown, media narratives continuously rewrite the past in light of the present: a revolution framed as a popular uprising in 1979 may be recast as the origin of state terrorism by 2005. Tracking such re-narrations computationally---through keyword co-occurrence across temporal layers---opens a window onto collective memory formation that qualitative methods alone cannot achieve at scale---which is what we attempt here, drawing on five decades of \textit{New York Times} coverage of Iran.
+
+\section{Data and Method}
+
+We use the New York Times Archive API \citep{NYTAPI}, which returns structured metadata for every article published since 1851: headline, abstract, lead paragraph, publication date, section, keyword tags (geographic, person, subject, and organization facets), and multimedia metadata with image URLs and captions. The API does not return full article text. This constraint is analytically productive rather than limiting: headlines and abstracts are the most ideologically compressed elements of news production---the components that most readers actually encounter and that editors craft most deliberately \citep{Entman1993}. They are, in short, where framing \emph{happens}.
+
+We retrieved monthly archives from January 1979 through January 2026 (approximately 4 million article records) and filtered for Iran-related content using keyword matching across both structured tags and free-text fields. While the analysis primarily focuses on textual framing, a subset of articles containing images will also be used to explore how visual elements and captions interact with textual narratives.
+Table~\ref{tab:periods} summarizes the resulting corpus across major geopolitical periods.
+
+\textbf{Data adequacy}\quad As Table~\ref{tab:periods} shows, the resulting corpus of 43,316 articles spans eight distinct geopolitical periods. An initial keyword-prevalence analysis already reveals clear frame-level variation: ``hostage'' dominates at 37\% of Iran headlines during 1979--82, ``nuclear'' rises to 45\% by 2006, and---most strikingly in the newly collected data---``Israel'' surges to 49\% in 2024, signaling the emergence of yet another dominant frame tied to the direct military confrontation. ``Protest'' spikes to 20\% in 2022 during the ``Women, Life, Freedom'' movement, confirming that the corpus captures event-driven framing shifts in real time. Throughout all periods, ``diplomacy'' never exceeds 7\%, remaining at 3--4\% even in the most recent years---suggesting that threat-oriented vocabulary systematically crowds out cooperative framing, precisely the asymmetry Said diagnosed qualitatively. Additionally, 9,131 articles (21\%) include image metadata, concentrated from 2004 onward, enabling multimodal analysis of visual--textual framing tensions.
+
+
+\begin{table}[h]
+  \caption{Iran-related NYT articles by geopolitical period.}
+  \label{tab:periods}
+  \begin{tabular}{lrrr}
+    \toprule
+    Period & Years & Articles & Per Year \\
+    \midrule
+    Revolution \& Hostage Crisis & 1979--1981 & 6,047 & 2,016 \\
+    Iran-Iraq War & 1980--1988 & 11,057 & 1,229 \\
+    Post-Cold-War & 1989--2000 & 10,213 & 851 \\
+    Post-9/11 Era & 2001--2014 & 12,719 & 908 \\
+    Nuclear Deal Era & 2015--2017 & 2,218 & 739 \\
+    Trump Max Pressure & 2018--2021 & 2,361 & 590 \\
+    Women, Life, Freedom & 2022--2023 & 690 & 345 \\
+    Direct Confrontation & 2024--2026 & 1,725 & 575 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% Two features of this corpus merit emphasis. First, the volume itself tells a story: annual coverage peaks at over 3,700 articles during the Iran-Iraq War (1988) and at 2,200 during the hostage crisis, yet declines to under 500 per year by the late 2010s---a trajectory of diminishing attention that coincides, paradoxically, with intensifying geopolitical tensions. Second, image metadata is available only from approximately 2004 onward, reaching 90\%+ coverage after 2016. This temporal asymmetry constrains our multimodal analysis to the nuclear-deal era but simultaneously focuses it on the period of greatest methodological interest.
+
+% \section{Preliminary Findings}
+
+% Our exploratory analysis reveals a pattern we term \emph{frame succession}. By computing the prevalence of key framing terms in headlines and abstracts over a 12-month rolling window, we observe a sequence of dominant lexical frames, each tied to a specific geopolitical era:
+
+% \begin{enumerate}
+%   \item \textbf{Hostage (1979--82):} ``Hostage'' appears in up to 37\% of all Iran-related articles---a level of lexical saturation unmatched by any other term in the corpus.
+%   \item \textbf{Military (1980s):} During the Iran-Iraq War, military vocabulary rises to $\sim$20\%, displacing the hostage frame.
+%   \item \textbf{Nuclear (2003--2020):} Starting from near-zero, ``nuclear'' climbs to 45\% of all coverage by 2006 and sustains this dominance for nearly two decades---the single most pervasive frame in the entire dataset.
+%   \item \textbf{Sanctions (2006--):} ``Sanctions'' emerges as a secondary frame layered atop the nuclear narrative, reaching $\sim$15\%.
+% \end{enumerate}
+
+% The critical observation is not merely that frames change---one would expect vocabulary to track events---but rather \emph{what does not change}. ``Diplomacy'' and ``diplomatic'' remain at 3--7\% across \emph{all} periods, including the 2015 JCPOA negotiations. This persistent asymmetry between threat-oriented and cooperation-oriented language provides quantitative evidence for what Said diagnosed qualitatively: that Western media coverage of Iran is structured around a grammar of danger, in which even diplomatic breakthroughs are narrated through the vocabulary of the threats they aim to resolve.
+
+\section{Research Questions}
+
+The patterns observed in our exploratory analysis---shifting dominant frames, persistent underrepresentation of diplomacy---motivate three research questions, each examining a different tension within the corpus. In all cases, we analyze both textual framing and, where available, the accompanying images---which can reinforce or complicate the written narrative.
+
+\textbf{RQ1 (Frame discontinuities):} Did Western newspaper representations of Iran change following major geopolitical events? Specifically, do sentiment and topic distributions exhibit statistically measurable breaks around key turning points (1979 Revolution, post-9/11, JCPOA, 2022 ``Women, Life, Freedom'' protests)? If media framing responds to geopolitical shocks, we should observe shifts in vocabulary, sentiment, and dominant topics at these moments.
+
+\textbf{RQ2 (Re-narration):} When the \textit{NYT} references past events in the context of current ones, does the framing vocabulary applied to those past events change? Our co-occurrence analysis offers an initial signal: 381 articles mention both ``revolution'' and ``hostage,'' while 140 link ``revolution'' to ``nuclear''---suggesting that the Revolution is being retroactively absorbed into later threat frames.
+
+\textbf{RQ3 (Genre and thematic framing):} News reporting is conventionally expected to maintain neutrality, while opinion writing often reflects explicit ideological positions. Does the representation of Iran vary systematically between these genres, and across thematic contexts (political coverage, cultural reporting, protest coverage, nuclear program)? Where images are available, we examine whether accompanying visuals reinforce or diverge from the textual frame.
+% \textbf{RQ3 (Visual--textual tension):} Do the images accompanying Iran coverage reinforce or complicate the textual frame? In particular, does an article framed around diplomacy feature images of military parades, or vice versa? The availability of image metadata from 2004 enables a focused multimodal analysis of this question.
+
+\section{Outlook}
+
+To address these questions, we will apply BERTopic \citep{Grootendorst2022} for dynamic topic modeling, enabling us to track how thematic clusters evolve across decades. Transformer-based sentiment analysis will measure headline-level affect, while structural break detection will identify statistically significant framing shifts at geopolitical turning points. For visual analysis, we plan to annotate a stratified sample of images and cross-tabulate their content categories with textual framing scores. The 2022 ``Women, Life, Freedom'' protests and the 2024--2025 Israel--Iran direct confrontation provide particularly critical test cases: they allow us to examine whether the frame-succession pattern identified in the historical data extends to the present---or whether new narrative structures are emerging.
+
+\printbibliography
+
+\end{document}

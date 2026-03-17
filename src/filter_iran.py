@@ -74,15 +74,26 @@ def extract_article(doc):
     multimedia = doc.get("multimedia", [])
     media_entries = []
     for m in (multimedia or []):
-        media_entries.append({
-            "url": m.get("url", ""),
-            "caption": m.get("caption", ""),
-            "credit": m.get("credit", ""),
-            "type": m.get("type", ""),
-            "subtype": m.get("subtype", ""),
-            "height": m.get("height", 0),
-            "width": m.get("width", 0),
-        })
+        if isinstance(m, dict):
+            media_entries.append({
+                "url": m.get("url", ""),
+                "caption": m.get("caption", ""),
+                "credit": m.get("credit", ""),
+                "type": m.get("type", ""),
+                "subtype": m.get("subtype", ""),
+                "height": m.get("height", 0),
+                "width": m.get("width", 0),
+            })
+        elif isinstance(m, str):
+            media_entries.append({
+                "url": m,
+                "caption": "",
+                "credit": "",
+                "type": "image",
+                "subtype": "",
+                "height": 0,
+                "width": 0,
+            })
 
     return {
         "headline": headline_main,
