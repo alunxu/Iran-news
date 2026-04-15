@@ -1,0 +1,57 @@
+%% DH-412 Project Report 2
+\documentclass{dhnbpub}
+\addbibresource{sample.bib}
+\renewcommand{\abstractname}{}
+\sloppy
+
+\usepackage{listings}
+\lstset{breaklines=true}
+\usepackage{booktabs}
+
+\begin{document}
+
+\conference{DH-412: History and the Digital, EPFL, Spring 2026}
+
+\title{{\normalsize DH-412 History and the Digital $|$ Report 2---Secondary Literature and Methods}\\[0.3em]
+Framing Against Itself: \\Intra-Textual Tensions in \textit{NYT} Iran Coverage}
+
+\author{Weilun Xu}
+\author{Niccholas Tim Reiz}
+\author{Nastaran Hashemisanjani}
+\author{Dmitry Teploukhov}
+
+\shorttitle{Framing Against Itself: Intra-Textual Tensions in \textit{NYT} Iran Coverage}
+\maketitle
+
+\section{Secondary Literature}
+
+Computational framing studies overwhelmingly treat news articles as monolithic carriers of a single frame. Yet a newspaper is not a single voice: its headlines, leads, body text, editorials, and cultural pages are produced under different constraints, for different audiences, with different rhetorical goals. Our overarching question asks: \emph{does the editorial apparatus of the \textit{New York Times} construct a coherent image of Iran---or do its structural components pull in systematically contradictory directions, and if so, how has this tension evolved over five decades of crisis coverage?}
+
+This question builds on three bodies of literature. First, framing theory provides the conceptual foundation. \citet{Entman1993} defined framing as selecting ``some aspects of a perceived reality'' and making them salient, identifying four frame functions: problem definition, causal attribution, moral evaluation, and treatment recommendation. \citet{PanKosicki1993} decomposed news discourse into four structural dimensions---syntactical (headline, lead), script (narrative), thematic (causal reasoning), and rhetorical (stylistic)---calling headlines ``the most salient cue'' for reader interpretation. Crucially, these dimensions can carry \emph{different} frame signals, but subsequent computational work has rarely measured the divergence between them. Experimental evidence suggests such divergence matters: \citet{Ecker2014} showed that misleading headlines bias inferential reasoning even after participants read the full text---a ``continued influence effect'' that persists because the headline establishes the initial interpretive frame. \citet{LeeMaslog2005} found that shorter news formats systematically favour war journalism over peace journalism, suggesting a structural mechanism by which compressed elements---headlines, briefs---amplify conflict framing relative to longer-form bodies.
+
+Second, scholarship on Western media framing of Iran provides the substantive case. Said's \emph{Covering Islam} \citeyearpar{Said1981} argued qualitatively that American media reduce Iran to a shifting set of security anxieties. \citet{Izadi2007} extended this through discourse analysis of 29 editorials across the \emph{NYT}, \emph{Washington Post}, and \emph{Wall Street Journal} (1984--2004), identifying six recurring Orientalist themes---``Oriental untrustworthiness,'' ``Islam as a threat,'' ``Oriental irrationality''---structuring coverage of Iran's nuclear program. Crucially, their analysis was confined to editorials; how these frames interact with news reporting in the same newspaper remains unexplored. More recently, \citet{Guo2025} applied the war/peace journalism framework to nuclear weapons coverage in the \emph{NYT}, \emph{Guardian}, and \emph{Global Times}, finding the \emph{NYT} predominantly war-journalism oriented---a finding our corpus allows us to test longitudinally across five decades rather than a single conflict.
+
+Third, the genre and section structure of a newspaper creates a natural experiment. \citet{Entman2004} showed that frames cascade from government elites through media to the public, explicitly distinguishing editorial pages from news pages as carrying different frame-diffusion capacities. If the same newspaper simultaneously produces a threatening Iran in its World section (threat/humanizing ratio of 0.33 in our preliminary data) and a culturally rich Iran in its Arts section (ratio: 4.54), the institution is not delivering a single frame but an internally contradictory discourse---one that can be mapped computationally. Where image metadata is available (21\% of articles, concentrated post-2004), we extend this analysis to visual--textual tensions. Preliminary results show that imaged articles carry higher threat density than non-imaged ones (14.6 vs.\ 12.1 per 1,000 words), and that 61\% of diplomacy-keyword articles simultaneously carry security keywords---suggesting that even diplomatic coverage is visually and semantically co-framed with threat.
+
+\section{Methods}
+
+\subsection{Data Enrichment}
+
+Our first report noted that the NYT Archive API returns only metadata, abstracts, and lead paragraphs---a significant limitation for intra-textual analysis. We have since addressed this by building a scraping pipeline that retrieves full article bodies from the Internet Archive's Wayback Machine and extracts text via \texttt{trafilatura} \citep{Barbaresi2021}. This enriched the corpus with 29,837 full articles (68.9\% of 43,316), yielding a 4.4$\times$ increase in total text---from 4.5 million to 20.6 million words. The enriched dataset is publicly available.\footnote{\url{https://huggingface.co/datasets/alunxu/nyt-iran-coverage}}
+
+\textbf{Limitations.}\quad Coverage is temporally uneven: strongest in the 1990s (94.4\%) and weakest in the 2020s (3.1\%), reflecting Wayback Machine archival patterns rather than editorial selection. Pre-1981 articles (26.3\% coverage) are often behind the NYT's scanned-page paywall. We address this bias by reporting decade-stratified results and by retaining abstracts and lead paragraphs as a fallback for articles without full text---the headline--abstract comparison remains available for the full 43,316-article corpus regardless of full-text availability.
+
+\subsection{Lexicon-Based Framing Analysis}
+
+We operationalize framing tension through three curated lexicons---\emph{threat} (63 terms: ``attack,'' ``nuclear,'' ``sanctions,'' ``kill,'' etc.), \emph{diplomacy} (34 terms: ``negotiate,'' ``agreement,'' ``reform,'' etc.), and \emph{humanizing} (44 terms: ``family,'' ``artist,'' ``freedom,'' ``culture,'' etc.)---mapped to the war/peace journalism indicators of \citet{LeeMaslog2005}. Replicating their framework on our corpus, we find that headlines carry a war/peace ratio of 2.71 versus 2.18 in full text, confirming their finding that compressed formats amplify war framing; the ratio has declined from 2.68 (1980s) to 1.72 (2020s), suggesting a slow structural shift. For each article, we compute lexicon density (hits per 1,000 tokens) separately for each structural component: headline, abstract, lead paragraph, and full text. The \emph{framing tension score} is defined as the divergence between component-level densities---for example, the headline--body threat gap ($D_{\text{HL}} - D_{\text{FT}}$).
+
+We choose lexicon-based methods over transformer classifiers at this stage for transparency (every decision is traceable to a word match, enabling qualitative validation) and scalability (29,837 articles process in under two minutes). We plan to complement this with BERTopic dynamic topic modeling \citep{Grootendorst2022} and transformer-based frame classifiers following \citet{Kwak2020}, who fine-tuned BERT on \citeauthor{Card2015}'s \citeyearpar{Card2015} 15-frame typology to classify 1.5 million NYT articles. The lexicon approach establishes baselines that the transformer models will refine.
+
+\subsection{Preliminary Validation}
+
+Initial results confirm that intra-textual framing tensions are measurable and non-trivial. Headlines carry 2.1$\times$ the threat density of their own article bodies (28.5 vs.\ 13.4 per 1,000 words), and this amplification is growing: from 12\% of articles in the 1970s to 42\% in the 2020s. Humanizing language is the only lexicon category where full text exceeds headlines---suggesting that the editorial apparatus systematically concentrates threat in high-salience positions while distributing humanization across the less-read body. Across genres, reviews are 7$\times$ more humanizing than news analysis articles within the same newspaper. These patterns are robust across the decades with strong coverage (1980s--2010s) and---to our knowledge---have not been measured at this scale for Middle Eastern coverage.
+
+\clearpage
+\printbibliography
+
+\end{document}
