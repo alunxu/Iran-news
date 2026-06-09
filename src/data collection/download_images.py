@@ -16,11 +16,12 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-IMAGE_DIR = Path("images")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+IMAGE_DIR = PROJECT_ROOT / "data" / "images"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 NYT_IMAGE_BASE = "https://static01.nyt.com/"
-REQUEST_INTERVAL = 0.5  # seconds between image downloads
+REQUEST_INTERVAL = 0.3  # seconds between image downloads
 
 
 def article_id_from_uri(uri):

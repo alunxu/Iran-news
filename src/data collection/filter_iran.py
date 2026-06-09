@@ -9,6 +9,7 @@ extracts relevant fields, and saves to Parquet + CSV.
 
 import json
 import re
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -19,22 +20,35 @@ OUTPUT_DIR = Path("data")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Iran-related search terms (case-insensitive)
+# v2: added Teheran (alt spelling), Ahmadinejad, and other high-precision
+# Iran-specific terms to close recall gaps (a quick-check against 4M raw
+# articles showed +292 net-new genuine Iran articles missed by v1).
 IRAN_TERMS = [
-    r"\biran\b",
-    r"\biranian\b",
-    r"\biranians\b",
-    r"\btehran\b",
-    r"\bpersia\b",
-    r"\bpersian\b",
+    # Country / nationality
+    r"\biran\b", r"\biranian\b", r"\biranians\b",
+    # Capital — both NYT spellings
+    r"\btehran\b", r"\bteheran\b",
+    # Culture / language / historical names
+    r"\bpersia\b", r"\bpersian\b", r"\bfarsi\b",
+    r"\bpahlavi\b",
+    # Supreme leaders / clerical leadership
     r"\bayatollah\b",
-    r"\bkhamenei\b",
-    r"\bkhomeini\b",
-    r"\brouhani\b",
-    r"\braisi\b",
-    r"\bpezeshkian\b",
+    r"\bkhamenei\b", r"\bkhomeini\b",
+    # Presidents (post-revolution)
+    r"\brafsanjani\b", r"\bkhatami\b", r"\bahmadinejad\b",
+    r"\brouhani\b", r"\braisi\b", r"\bpezeshkian\b",
+    # Pre-revolution historical figures
+    r"\bmoss[ae]de[gq]h?\b",  # Mossadegh / Mossadeq variants
+    # Iranian state / military / political entities
     r"\birgc\b",
-    r"\bislamicrepublic\b",
-    r"\bislamic\s+republic\b",
+    r"\bislamicrepublic\b", r"\bislamic\s+republic\b",
+    r"\bquds\s+force\b", r"\bpasdaran\b", r"\bbasij\b",
+    r"\bmajlis\b",
+    # Key Iran-specific events / locations / figures
+    r"\bsoleimani\b",
+    r"\bmahsa(?:\s+amini)?\b",
+    r"\bjcpoa\b",
+    r"\bnatanz\b", r"\bfordow\b", r"\bbushehr\b",
 ]
 
 IRAN_PATTERN = re.compile("|".join(IRAN_TERMS), re.IGNORECASE)
@@ -144,9 +158,23 @@ def is_iran_related(doc):
     return False
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Filter NYT Archive API dumps for Iran-related articles.")
+    parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--output-prefix", default="iran_articles",
+                        help="Output basename without extension.")
+    return parser.parse_args()
+
+
 def main():
-    json_files = sorted(RAW_DIR.glob("*.json"))
-    print(f"Found {len(json_files)} monthly archive files in {RAW_DIR}/")
+    args = parse_args()
+    raw_dir = args.raw_dir
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    json_files = sorted(raw_dir.glob("*.json"))
+    print(f"Found {len(json_files)} monthly archive files in {raw_dir}/")
 
     if not json_files:
         print("No raw data found. Run collect_archive.py first.")
@@ -199,8 +227,8 @@ def main():
     df = df.sort_values("pub_date").reset_index(drop=True)
 
     # Save
-    parquet_path = OUTPUT_DIR / "iran_articles.parquet"
-    csv_path = OUTPUT_DIR / "iran_articles.csv"
+    parquet_path = output_dir / f"{args.output_prefix}.parquet"
+    csv_path = output_dir / f"{args.output_prefix}.csv"
 
     df.to_parquet(parquet_path, index=False)
     df.to_csv(csv_path, index=False)

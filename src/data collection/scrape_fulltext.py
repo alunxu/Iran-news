@@ -230,6 +230,56 @@ async def fetch_from_wayback(
         return None, -3
 
 
+async def discover_wayback_timestamps(
+    session: aiohttp.ClientSession,
+    nyt_url: str,
+    limit: int = 5,
+) -> list[str]:
+    """Ask Wayback's CDX index for actual archived snapshots of this URL.
+
+    Fixed timestamp fallbacks work for many recent pages, but pre-web archive
+    URLs often have sparse snapshots at irregular dates (e.g. 2020/2021 only).
+    CDX discovery prevents us from falsely classifying those as unrecoverable.
+    """
+    cdx_url = "https://web.archive.org/cdx"
+    params = {
+        "url": nyt_url,
+        "output": "json",
+        "fl": "timestamp,statuscode,mimetype,digest",
+        "filter": ["statuscode:200", "mimetype:text/html"],
+        "collapse": "digest",
+        "limit": str(limit),
+    }
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
+
+    try:
+        async with session.get(
+            cdx_url,
+            params=params,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status != 200:
+                return []
+            data = await resp.json(content_type=None)
+    except Exception as e:
+        log.debug(f"CDX lookup failed for {nyt_url}: {e}")
+        return []
+
+    if not isinstance(data, list) or len(data) <= 1:
+        return []
+
+    timestamps = []
+    for row in data[1:]:
+        if not row:
+            continue
+        timestamp = str(row[0])
+        if timestamp and timestamp.isdigit():
+            # id_ asks Wayback for the archived page content without rewriting.
+            timestamps.append(f"{timestamp}id_")
+    return timestamps
+
+
 def is_timesmachine_page(html: str) -> bool:
     """Detect NYT TimesMachine paywall pages (scanned archive previews).
 
@@ -238,7 +288,10 @@ def is_timesmachine_page(html: str) -> bool:
     as scanned images, not extractable via web scraping.
     """
     html_lower = html.lower()
-    return ("timesmachine" in html_lower or "view full article" in html_lower)
+    return (
+        "view full article in timesmachine" in html_lower
+        or "view full article" in html_lower and "timesmachine" in html_lower
+    )
 
 
 async def scrape_one(
@@ -261,13 +314,54 @@ async def scrape_one(
     last_http_status = 0
     best_text = ""  # keep best partial extraction across attempts
 
+    tried_timestamps = set()
+
+    async def try_timestamp(timestamp: str):
+        """Try one Wayback timestamp and return (result, status, best_text_update)."""
+        html, http_status = await fetch_from_wayback(session, url, timestamp=timestamp)
+
+        if http_status == 429:
+            wait = 5 + random.uniform(0, 2)
+            log.warning(f"Rate limited (429), waiting {wait:.1f}s...")
+            await asyncio.sleep(wait)
+            return None, http_status, None
+
+        if html is None or http_status != 200:
+            return None, http_status, None
+
+        if is_timesmachine_page(html):
+            return None, http_status, None
+
+        fulltext = extract_text(html, url)
+        if fulltext is None:
+            return None, http_status, None
+
+        wc = len(fulltext.split())
+        if wc < MIN_ARTICLE_WORDS:
+            return None, http_status, fulltext
+
+        if save_html:
+            html_path = HTML_DIR / f"{hashlib.md5(uri.encode()).hexdigest()[:12]}.html"
+            html_path.write_text(html, encoding="utf-8")
+
+        return ScrapeResult(
+            uri=uri, web_url=url, status="success",
+            word_count=wc, content_hash=content_hash(fulltext),
+            fulltext=fulltext, http_status=200, scrape_time=time.monotonic() - t0,
+        ), http_status, None
+
     for timestamp in urls_to_try:
+        tried_timestamps.add(timestamp)
         # Bail fast if Wayback keeps dropping connections for this URL
         if consecutive_conn_errors >= 2:
             break
 
-        html, http_status = await fetch_from_wayback(session, url, timestamp=timestamp)
+        result, http_status, partial_text = await try_timestamp(timestamp)
         last_http_status = http_status
+        if result:
+            return result
+        if partial_text and len(partial_text.split()) > len(best_text.split()):
+            best_text = partial_text
 
         # --- Handle non-200 responses ---
 
@@ -294,39 +388,20 @@ async def scrape_one(
             consecutive_conn_errors = 0
             continue  # bot-blocked on this attempt, try next timestamp
 
-        if html is None or http_status != 200:
+        if http_status != 200:
             continue  # server error (503, 520, etc.), try next
 
-        # --- Got HTML (status 200) ---
-        consecutive_conn_errors = 0
-
-        # Check for TimesMachine paywall
-        if is_timesmachine_page(html):
-            continue  # try next timestamp for a non-paywall snapshot
-
-        # Extract article text
-        fulltext = extract_text(html, url)
-
-        if fulltext is None:
-            continue  # extraction failed on this snapshot, try next
-
-        wc = len(fulltext.split())
-        if wc < MIN_ARTICLE_WORDS:
-            # Keep best partial extraction in case all attempts are short
-            if wc > len(best_text.split()):
-                best_text = fulltext
-            continue  # try next timestamp for a better snapshot
-
-        # Success!
-        if save_html:
-            html_path = HTML_DIR / f"{hashlib.md5(uri.encode()).hexdigest()[:12]}.html"
-            html_path.write_text(html, encoding="utf-8")
-
-        return ScrapeResult(
-            uri=uri, web_url=url, status="success",
-            word_count=wc, content_hash=content_hash(fulltext),
-            fulltext=fulltext, http_status=200, scrape_time=time.monotonic() - t0,
-        )
+    # If fixed fallbacks failed, ask CDX for actual snapshots and try them.
+    cdx_timestamps = await discover_wayback_timestamps(session, url, limit=5)
+    for timestamp in cdx_timestamps:
+        if timestamp in tried_timestamps:
+            continue
+        result, http_status, partial_text = await try_timestamp(timestamp)
+        last_http_status = http_status
+        if result:
+            return result
+        if partial_text and len(partial_text.split()) > len(best_text.split()):
+            best_text = partial_text
 
     # --- Exhausted all attempts ---
     elapsed = time.monotonic() - t0
@@ -433,10 +508,11 @@ def load_articles(
     limit: Optional[int] = None,
     start_year: Optional[int] = None,
     end_year: Optional[int] = None,
+    input_path: Optional[Path] = None,
 ) -> list:
     """Load (uri, web_url) pairs from the Iran articles dataset."""
-    parquet_path = DATA_DIR / "iran_articles.parquet"
-    csv_path = DATA_DIR / "iran_articles.csv"
+    parquet_path = input_path if input_path and input_path.suffix == ".parquet" else DATA_DIR / "iran_articles.parquet"
+    csv_path = input_path if input_path and input_path.suffix == ".csv" else DATA_DIR / "iran_articles.csv"
 
     articles = []
 
@@ -493,6 +569,7 @@ async def run_scraper(args):
         limit=args.limit,
         start_year=args.start_year,
         end_year=args.end_year,
+        input_path=args.input,
     )
 
     if not articles:
@@ -619,6 +696,10 @@ def main():
         help="Also save raw HTML for each article",
     )
     parser.add_argument(
+        "--input", type=Path, default=None,
+        help="Input Iran article dataset (.parquet or .csv). Defaults to data/iran_articles.*",
+    )
+    parser.add_argument(
         "--limit", type=int, default=None,
         help="Only scrape first N articles (for testing)",
     )
@@ -657,6 +738,8 @@ def main():
     print(f"  Concurrency: {args.concurrency} workers")
     print(f"  Delay: {args.delay}s per worker")
     print(f"  Save HTML: {args.save_html}")
+    if args.input:
+        print(f"  Input: {args.input}")
     if args.start_year or args.end_year:
         print(f"  Year range: {args.start_year or '...'} – {args.end_year or '...'}")
     if args.limit:

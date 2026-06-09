@@ -2,11 +2,12 @@
 """
 Collect all NYT articles via the Archive API.
 
-Downloads one JSON per month from Jan 1979 to Mar 2026.
+Downloads one JSON per month for a configurable date range.
 Supports resume — skips months that are already downloaded.
 Rate-limited to 12-second intervals to stay within API limits.
 """
 
+import argparse
 import os
 import json
 import time
@@ -30,7 +31,7 @@ ARCHIVE_URL = "https://api.nytimes.com/svc/archive/v1/{year}/{month}.json"
 RAW_DIR = Path("data/raw")
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-# Date range
+# Default date range used by the first corpus collection.
 START_YEAR, START_MONTH = 1979, 1
 END_YEAR, END_MONTH = 2026, 3  # inclusive
 
@@ -81,9 +82,25 @@ def download_month(year, month, retries=3):
     return None
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Download monthly NYT Archive API dumps.")
+    parser.add_argument("--start-year", type=int, default=START_YEAR)
+    parser.add_argument("--start-month", type=int, default=START_MONTH)
+    parser.add_argument("--end-year", type=int, default=END_YEAR)
+    parser.add_argument("--end-month", type=int, default=END_MONTH)
+    parser.add_argument("--interval", type=float, default=REQUEST_INTERVAL,
+                        help="Seconds to wait between successful monthly requests.")
+    return parser.parse_args()
+
+
 def main():
-    months = list(generate_months(START_YEAR, START_MONTH, END_YEAR, END_MONTH))
-    print(f"Archive collection: {len(months)} months ({START_YEAR}-{START_MONTH:02d} to {END_YEAR}-{END_MONTH:02d})")
+    args = parse_args()
+    months = list(generate_months(args.start_year, args.start_month, args.end_year, args.end_month))
+    print(
+        "Archive collection: "
+        f"{len(months)} months ({args.start_year}-{args.start_month:02d} "
+        f"to {args.end_year}-{args.end_month:02d})"
+    )
 
     # Check which months are already downloaded
     existing = set()
@@ -116,7 +133,7 @@ def main():
             fail_count += 1
 
         # Rate limit
-        time.sleep(REQUEST_INTERVAL)
+        time.sleep(args.interval)
 
     print(f"\nDone! Downloaded: {success_count}, Failed: {fail_count}")
     print(f"Total raw files: {len(list(RAW_DIR.glob('*.json')))}")

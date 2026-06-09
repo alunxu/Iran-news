@@ -15,6 +15,24 @@ __pycache__/
 # macOS
 .DS_Store
 
+# External secondary-literature PDFs (copyrighted; keep local only)
+doc/*.pdf
+
+# Generated intermediate figures; final report figures live in report/final_report/
+figures/final_report/
+figures/methods/
+figures/quality/
+figures/structural_break/
+
+# Presentation drafts are edited collaboratively outside the code repo
+presentation/
+
+# Private research notes
+notes/
+
+# Reports are kept locally and not committed to GitHub
+report/
+
 # LaTeX build artifacts
 report/*.aux
 report/*.bbl

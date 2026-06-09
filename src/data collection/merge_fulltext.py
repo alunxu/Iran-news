@@ -17,6 +17,7 @@ import csv
 import hashlib
 import json
 import sys
+import argparse
 from pathlib import Path
 
 try:
@@ -29,6 +30,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 FULLTEXT_DIR = DATA_DIR / "fulltext"
 SCRAPE_RESULTS_PATH = DATA_DIR / "fulltext_articles.csv"
+RECOVERY_RESULTS_PATH = DATA_DIR / "recovery_articles.csv"
+SUBSCRIPTION_RESULTS_PATH = DATA_DIR / "nyt_subscription_articles.csv"
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Merge scraped full text into an Iran article metadata dataset.")
+    parser.add_argument("--input", type=Path, default=DATA_DIR / "iran_articles.parquet",
+                        help="Input metadata parquet.")
+    parser.add_argument("--output-prefix", default="iran_articles_full",
+                        help="Output basename without extension.")
+    return parser.parse_args()
 
 
 def uri_to_hash(uri: str) -> str:
@@ -39,29 +51,48 @@ def uri_to_hash(uri: str) -> str:
 import re
 
 def clean_fulltext(text: str) -> str:
-    """Clean up known scraping artifacts from extracted text."""
-    # Strip "Advertisement" / "SKIP ADVERTISEMENT" prefix lines
+    """Clean known scraping artifacts (ads, navigation, archive boilerplate)
+    from extracted article text. Patterns target trafilatura's known leaks
+    in NYT-rendered pages.
+    """
+    # 1. Strip standalone "Advertisement" / "SKIP ADVERTISEMENT" / "Supported by"
+    #    lines wherever they appear (prefix, between paragraphs, suffix)
     text = re.sub(
-        r"^(?:Advertisement\s*(?:SKIP\s+ADVERTISEMENT\s*(?:Supported\s+by\s*)?(?:SKIP\s+ADVERTISEMENT\s*)?)?)\s*",
+        r"(?im)^[ \t]*(?:advertisement|skip advertisement|supported by)[ \t]*$\n?",
         "",
         text,
-        flags=re.IGNORECASE,
     )
-    # Strip trailing "Continue reading the main story" boilerplate
+    # 2. Strip "Continue reading the main story" navigation prompts (anywhere)
     text = re.sub(
-        r"\s*Continue reading the main story\.?\s*$",
+        r"(?i)\s*continue reading the main story\.?\s*",
+        " ",
+        text,
+    )
+    # 3. Strip TimesMachine "View Full Article" stubs that slipped through
+    text = re.sub(
+        r"(?i)\s*view full article in timesmachine\.?\s*",
+        " ",
+        text,
+    )
+    # 4. Strip "From print:" / "Archives" provenance markers
+    text = re.sub(
+        r"(?im)^[ \t]*(?:from print|the new york times archives)[ \t]*[:.]?[ \t]*$\n?",
         "",
         text,
-        flags=re.IGNORECASE,
     )
+    # 5. Collapse 3+ consecutive newlines to 2 (paragraph separator)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    # 6. Trim leading/trailing whitespace
     return text.strip()
 
 
 def main():
+    args = parse_args()
+
     # Load original dataset
-    parquet_path = DATA_DIR / "iran_articles.parquet"
+    parquet_path = args.input
     if not parquet_path.exists():
-        print("ERROR: iran_articles.parquet not found. Run filter_iran.py first.")
+        print(f"ERROR: {parquet_path} not found. Run filter_iran.py first.")
         return
 
     df = pd.read_parquet(parquet_path)
@@ -100,7 +131,63 @@ def main():
             else:
                 fulltext_map[uri] = ""
 
+    # Apply recovery results (overrides original status for recovered articles)
+    if RECOVERY_RESULTS_PATH.exists():
+        recovery_df = pd.read_csv(RECOVERY_RESULTS_PATH).drop_duplicates("uri", keep="last")
+        n_recovered = (recovery_df["status"] == "recovered").sum()
+        print(f"\nRecovery results: {len(recovery_df):,} entries ({n_recovered:,} recovered)")
+
+        for _, row in recovery_df.iterrows():
+            uri = str(row["uri"])
+            if row["status"] == "recovered":
+                txt_path = FULLTEXT_DIR / f"{uri_to_hash(uri)}.txt"
+                if txt_path.exists():
+                    text = clean_fulltext(txt_path.read_text(encoding="utf-8"))
+                    fulltext_map[uri] = text
+                    status_map[uri] = "recovered"
+                    wordcount_map[uri] = int(row.get("word_count", 0))
+
+    # Apply NYT subscription scraper results (highest priority — direct full text)
+    if SUBSCRIPTION_RESULTS_PATH.exists():
+        sub_df = pd.read_csv(SUBSCRIPTION_RESULTS_PATH).drop_duplicates("uri", keep="last")
+        n_sub = (sub_df["status"] == "success").sum()
+        print(f"\nSubscription results: {len(sub_df):,} entries ({n_sub:,} recovered)")
+
+        for _, row in sub_df.iterrows():
+            uri = str(row["uri"])
+            if row["status"] == "success":
+                txt_path = FULLTEXT_DIR / f"{uri_to_hash(uri)}.txt"
+                if txt_path.exists():
+                    text = clean_fulltext(txt_path.read_text(encoding="utf-8"))
+                    fulltext_map[uri] = text
+                    status_map[uri] = "subscription"
+                    wordcount_map[uri] = int(row.get("word_count", 0))
+
     print(f"\nFull texts loaded: {len(fulltext_map):,}")
+
+    # Deduplicate by content hash (first 1000 chars). Keep the longest text;
+    # blank out the others (preserves their metadata row but prevents counting
+    # the same article twice in body-level analyses).
+    from collections import defaultdict
+    hash_to_uris: dict[str, list[str]] = defaultdict(list)
+    for uri, text in fulltext_map.items():
+        if text:
+            h = hashlib.sha1(text[:1000].encode("utf-8")).hexdigest()
+            hash_to_uris[h].append(uri)
+
+    dropped_dupes = 0
+    for h, uris in hash_to_uris.items():
+        if len(uris) > 1:
+            # Keep the URI with the longest text
+            keep = max(uris, key=lambda u: len(fulltext_map[u]))
+            for u in uris:
+                if u != keep:
+                    fulltext_map[u] = ""
+                    status_map[u] = "duplicate"
+                    wordcount_map[u] = 0
+                    dropped_dupes += 1
+    if dropped_dupes:
+        print(f"Deduplicated: {dropped_dupes:,} duplicate articles blanked (kept 1 per content-hash group)")
 
     # Merge into main dataset
     df["fulltext"] = df["uri"].map(fulltext_map).fillna("")
@@ -141,8 +228,8 @@ def main():
         print(f"  Enrichment factor: {avg_fulltext / max(avg_abstract + avg_lead, 1):.1f}x more text")
 
     # Save enriched dataset
-    out_parquet = DATA_DIR / "iran_articles_full.parquet"
-    out_csv = DATA_DIR / "iran_articles_full.csv"
+    out_parquet = DATA_DIR / f"{args.output_prefix}.parquet"
+    out_csv = DATA_DIR / f"{args.output_prefix}.csv"
 
     df.drop(columns=["decade"], inplace=True)
     df.to_parquet(out_parquet, index=False)
